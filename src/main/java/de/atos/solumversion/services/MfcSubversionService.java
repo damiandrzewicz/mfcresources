@@ -1,33 +1,34 @@
 package de.atos.solumversion.services;
 
+import de.atos.solumversion.configuration.WorkingCopyDirectoryConfig;
 import de.atos.solumversion.domain.MfcSubversionProject;
 import de.atos.solumversion.domain.SubversionDirectory;
 import de.atos.solumversion.domain.SubversionFile;
+import de.atos.solumversion.exceptions.WorkingCopyDirectoryException;
 import org.springframework.stereotype.Service;
 import org.tmatesoft.svn.core.*;
 import org.tmatesoft.svn.core.wc.SVNInfo;
 import org.tmatesoft.svn.core.wc.SVNRevision;
 
 import java.io.File;
-import java.lang.reflect.Array;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class MfcSubversionService {
 
-    String workingCopySvnRoot = "svn";
+    private WorkingCopyDirectoryConfig workingCopyDirectoryConfig;
 
-    private SubversionService subversionService;
+    private SubversionService1 subversionService1;
 
-    public MfcSubversionService(SubversionService subversionService) {
-        this.subversionService = subversionService;
+    public MfcSubversionService(WorkingCopyDirectoryConfig workingCopyDirectoryConfig, SubversionService1 subversionService1) {
+        this.workingCopyDirectoryConfig = workingCopyDirectoryConfig;
+        this.subversionService1 = subversionService1;
     }
 
     public void init(String url) throws MfcSubversionServiceException {
         try {
             SVNURL svnurl = SVNURL.parseURIEncoded(url);
-            subversionService.open(svnurl);
+            subversionService1.open(svnurl);
         } catch (SVNAuthenticationException e){
             throw new MfcSubversionServiceException("authentication error");
         } catch (SVNException e) {
@@ -36,7 +37,7 @@ public class MfcSubversionService {
     }
 
     public void authentiate(String user, String password) {
-        subversionService.authenticate(user, password);
+        subversionService1.authenticate(user, password);
     }
 
     public MfcSubversionProject loadProject() throws MfcSubversionServiceException {
@@ -73,9 +74,9 @@ public class MfcSubversionService {
             } catch (SVNException e) {
                 throw new MfcSubversionServiceException("malformed svn root directory");
             }
-            File wcDir = new File(workingCopySvnRoot + "/" + subversionDirectory.getName());
+            File wcDir = new File(workingCopyDirectoryConfig.getRootDirectory() + "/" + subversionDirectory.getName());
             try {
-                subversionService.checkoutFolder(svnUrl, SVNRevision.HEAD, wcDir, SVNDepth.EMPTY);
+                subversionService1.checkoutFolder(svnUrl, SVNRevision.HEAD, wcDir, SVNDepth.EMPTY);
             } catch (SVNException e) {
                 throw new MfcSubversionServiceException(String.format("error checking out project: [%s]", svnUrl.toString()));
             }
@@ -88,7 +89,7 @@ public class MfcSubversionService {
 
             //Update resources with parents
             try {
-                subversionService.updateFiles((File[])files.toArray(), SVNRevision.HEAD, SVNDepth.FILES);
+                subversionService1.updateFiles((File[])files.toArray(), SVNRevision.HEAD, SVNDepth.FILES);
             } catch (SVNException e) {
                 throw new MfcSubversionServiceException("error updating files");
             }
@@ -101,7 +102,7 @@ public class MfcSubversionService {
             //Update resources with parents
             File workingDir = new File(svnInfo.getPath());
             try {
-                subversionService.updateFiles(new File[]{workingDir}, SVNRevision.HEAD, SVNDepth.FILES);
+                subversionService1.updateFiles(new File[]{workingDir}, SVNRevision.HEAD, SVNDepth.FILES);
             } catch (SVNException e) {
                 throw new MfcSubversionServiceException("error updating files");
             }
@@ -118,7 +119,7 @@ public class MfcSubversionService {
     public void commit(File[] files, String commitMessage) throws MfcSubversionServiceException {
 
         try {
-            SVNCommitInfo commit = subversionService.commit(files, false, commitMessage);
+            SVNCommitInfo commit = subversionService1.commit(files, false, commitMessage);
         } catch (SVNException e) {
             throw new MfcSubversionServiceException("error commit choosen files");
         }
@@ -126,7 +127,7 @@ public class MfcSubversionService {
 
 
     private Optional<SubversionDirectory> checkProject() throws SVNException {
-        Collection entries = subversionService.getDirEntries("", SVNRevision.HEAD);
+        Collection entries = subversionService1.getDirEntries("", SVNRevision.HEAD);
         Iterator iterator = entries.iterator();
         String[] extensions = {"sln", "dsw"};
         while(iterator.hasNext()){
@@ -145,24 +146,44 @@ public class MfcSubversionService {
 
 
     private Optional<SVNInfo> isWorkingCopyExists(String name){
-        File file = new File(workingCopySvnRoot + "/" + name);
+        File file = new File(workingCopyDirectoryConfig.getRootDirectory() + "/" + name);
         try {
-            SVNInfo svnInfo = subversionService.wcInfo(file, SVNRevision.HEAD);
+            SVNInfo svnInfo = subversionService1.wcInfo(file, SVNRevision.HEAD);
             return Optional.of(svnInfo);
         } catch (SVNException e) {
             return Optional.empty();
         }
     }
 
+    public List<SubversionDirectory> workingCopyProjects() throws WorkingCopyDirectoryException {
+        List workingCopyProjects = new ArrayList();
+        File file = new File(workingCopyDirectoryConfig.getRootDirectory());
+        if(!file.exists() && !file.mkdirs()){
+            throw new WorkingCopyDirectoryException(String.format("cannot create folder [%s]", file.getAbsolutePath()));
+        }
+        File[] projects = file.listFiles();
+        for(var project : projects){
+            if(project.isDirectory()){
+                String name = project.getName();
+                Optional<SVNInfo> workingCopyProject = isWorkingCopyExists(name);
+                if(workingCopyProject.isPresent()){
+                    workingCopyProjects.add(workingCopyProject);
+                }
+            }
+        }
+
+        return workingCopyProjects;
+    }
+
     public List<SubversionFile> findProjectResources() throws SVNException {
         List resources = new ArrayList();
         String sourcesPath = "Src";
-        Collection entries = subversionService.getDirEntries(sourcesPath, SVNRevision.HEAD);
+        Collection entries = subversionService1.getDirEntries(sourcesPath, SVNRevision.HEAD);
         Iterator iterator = entries.iterator();
         while(iterator.hasNext()){
             SVNDirEntry entry = (SVNDirEntry) iterator.next();
             if(entry.getKind() == SVNNodeKind.DIR){
-                Collection projectEntries = subversionService.getDirEntries(sourcesPath + "/" + entry.getName(), SVNRevision.HEAD);
+                Collection projectEntries = subversionService1.getDirEntries(sourcesPath + "/" + entry.getName(), SVNRevision.HEAD);
                 Iterator projectIterator = projectEntries.iterator();
                 String[] resourceExtension = { "rc" };
                 while(projectIterator.hasNext()){
@@ -182,6 +203,10 @@ public class MfcSubversionService {
     }
 
     private static boolean checkIfFileHasExtension(String s, String[] extn){
-        return Arrays.stream(extn).anyMatch(s::endsWith);
+        boolean passed = false;
+        for(String extrn : extn){
+            passed = s.toUpperCase().endsWith(extrn.toUpperCase());
+        }
+        return passed;
     }
 }
