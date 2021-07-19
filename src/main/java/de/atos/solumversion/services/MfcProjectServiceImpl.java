@@ -1,7 +1,6 @@
 package de.atos.solumversion.services;
 
 import de.atos.solumversion.configuration.WorkingCopyDirectoryConfig;
-import de.atos.solumversion.dto.CommitDTO;
 import de.atos.solumversion.dto.SvnItemDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,13 +10,10 @@ import org.tmatesoft.svn.core.SVNDirEntry;
 import org.tmatesoft.svn.core.SVNException;
 import org.tmatesoft.svn.core.SVNURL;
 import org.tmatesoft.svn.core.wc.SVNRevision;
-import org.tmatesoft.svn.core.wc.SVNWCUtil;
 import org.tmatesoft.svn.core.wc2.*;
 
 import java.io.File;
-import java.net.ConnectException;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,7 +36,7 @@ public class MfcProjectServiceImpl implements MfcProjectService {
         // Open provided URL
         SVNURL svnurl = getSvnUrl(svnItemDTO.getRemoteData().getUrl());
 
-        Map<SvnTarget, SVNDirEntry> remoteRepositoryList = null;
+        List<SVNDirEntry> remoteRepositoryList = null;
         try {
             remoteRepositoryList = svnService.list(
                     new ArrayList<SvnTarget>(Arrays.asList(SvnTarget.fromURL(svnurl))),
@@ -54,46 +50,43 @@ public class MfcProjectServiceImpl implements MfcProjectService {
             throw new MfcProjectServiceException(String.format("Repository [{}] has no items!", svnurl.toString()));
         }
 
-        //Find project entry
-        Optional<Map.Entry<SvnTarget, SVNDirEntry>> rootDirectoryEntry = remoteRepositoryList.entrySet().stream()
-                .filter(svnTargetSVNDirEntryEntry -> svnTargetSVNDirEntryEntry.getValue().getRepositoryRoot() == svnTargetSVNDirEntryEntry.getValue().getURL())
-                .reduce((svnTargetSVNDirEntryEntry, svnTargetSVNDirEntryEntry2) -> {
-                    throw new IllegalStateException(String.format("Cannot find root directory for repository [{}]", svnurl.toString()));
-                });
-
         //Check if has project file ald sources folder
         List<String> projectExtensions = new ArrayList<>(Arrays.asList(".sln", "vcxproj"));
-        Optional<Map.Entry<SvnTarget, SVNDirEntry>> projectFile = remoteRepositoryList.entrySet().stream()
+        Optional<SVNDirEntry> projectDescriptor = remoteRepositoryList.stream()
                 .filter(svnTargetSVNDirEntryEntry -> {
-                    return projectExtensions.stream().anyMatch(s -> svnTargetSVNDirEntryEntry.getValue().getName().endsWith(s));
+                    return projectExtensions.stream().anyMatch(s -> svnTargetSVNDirEntryEntry.getName().endsWith(s));
                 })
                 .reduce((svnTargetSVNDirEntryEntry, svnTargetSVNDirEntryEntry2) -> {
                     throw new IllegalStateException(String.format("Found more than one project file for repository [{}]", svnurl.toString()));
                 });
 
-        if(projectFile.isEmpty()){
+        if(projectDescriptor.isEmpty()){
 
         }
 
+        String projectPath = projectDescriptor.get().getRepositoryRoot().getPath();
+        String projectName = projectPath.substring(projectPath.lastIndexOf("/") + 1);
+
+
         //Found MFC project -> search for sources folder
-        Optional<Map.Entry<SvnTarget, SVNDirEntry>> srcFolder = remoteRepositoryList.entrySet().stream()
-                .filter(svnTargetSVNDirEntryEntry -> svnTargetSVNDirEntryEntry.getValue().getName().compareToIgnoreCase("src") == 0)
+        Optional<SVNDirEntry> remoteSourcesFolder = remoteRepositoryList.stream()
+                .filter(svnTargetSVNDirEntryEntry -> svnTargetSVNDirEntryEntry.getName().compareToIgnoreCase("src") == 0)
                 .reduce((svnTargetSVNDirEntryEntry, svnTargetSVNDirEntryEntry2) -> {
                     throw new IllegalStateException(String.format("Found more than one sources folder for repository [{}]", svnurl.toString()));
                 });
         //.collect(Collectors.toList());
 
-        if(srcFolder.isEmpty()){
+        if(remoteSourcesFolder.isEmpty()){
 
         }
 
         //Found sources folder -> search for all resources
-        SVNURL srcUrl = srcFolder.get().getValue().getURL();
-        Map<SvnTarget, SVNDirEntry> resources = null;
+        SVNURL srcUrl = remoteSourcesFolder.get().getURL();
+        List<SVNDirEntry> resources = null;
         try {
             resources = svnService.list(
                     new ArrayList<SvnTarget>(Arrays.asList(SvnTarget.fromURL(srcUrl))),
-                    SVNDepth.FILES,
+                    SVNDepth.INFINITY,
                     SVNRevision.HEAD
             );
         } catch (SVNException e) {
@@ -105,13 +98,45 @@ public class MfcProjectServiceImpl implements MfcProjectService {
         }
 
         //Checkout base project folder
-        File wcFile = new File(workingCopyDirectoryConfig.getRootDirectory() + "/" + rootDirectoryEntry.get().getValue().getName());
+        File wcFile = new File(workingCopyDirectoryConfig.getRootDirectory() + "/" + projectName);
         try {
             svnService.checkout(
-                    new ArrayList<SvnTarget>(Arrays.asList(SvnTarget.fromURL(svnurl))),
                     SvnTarget.fromFile(wcFile),
+                    SvnTarget.fromURL(svnurl),
                     SVNDepth.EMPTY,
                     SVNRevision.HEAD
+            );
+        } catch (SVNException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            svnService.cleanup(
+                    new ArrayList<SvnTarget>(Arrays.asList(SvnTarget.fromFile(wcFile))),
+                    SVNDepth.INFINITY,
+                    SVNRevision.HEAD
+            );
+        } catch (SVNException e) {
+            e.printStackTrace();
+        }
+
+        //Update only resource files
+        List<SvnTarget> resourcesTargets = resources.stream()
+                .filter(svnTargetSVNDirEntryEntry -> svnTargetSVNDirEntryEntry.getName().endsWith(".rc"))
+                .map(svnTargetSVNDirEntryEntry -> {
+                    String url = svnTargetSVNDirEntryEntry.getURL().toString();
+                    String root = svnTargetSVNDirEntryEntry.getRepositoryRoot().toString();
+                    url = url.replace(root, "");
+                    return SvnTarget.fromFile(new File( wcFile + "/" + url));
+                })
+                .collect(Collectors.toList());
+
+        try {
+            svnService.update(
+                    resourcesTargets,
+                    SVNDepth.FILES,
+                    SVNRevision.HEAD,
+                    true
             );
         } catch (SVNException e) {
             e.printStackTrace();

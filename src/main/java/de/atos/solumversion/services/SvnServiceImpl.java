@@ -13,6 +13,7 @@ import org.tmatesoft.svn.core.SVNException;
 import org.tmatesoft.svn.core.wc.SVNRevision;
 import org.tmatesoft.svn.core.wc2.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,39 +40,39 @@ public class SvnServiceImpl implements SvnService{
     }
 
     @Override
-    public Map<SvnTarget, SvnInfo> info(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException {
+    public List<SvnInfo> info(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException {
         SvnGetInfo info = operationFactory.getFactory().createGetInfo();
         targets.stream().forEach(svnTarget -> info.addTarget(svnTarget));
         info.setDepth(depth);
         info.setRevision(revision);
 
-        Map<SvnTarget, SvnInfo> map = new HashMap();
-        info.setReceiver((svnTarget, svnInfo) -> map.put(svnTarget, svnInfo));
+        List<SvnInfo> result = new ArrayList();
+        info.setReceiver((svnTarget, svnInfo) -> result.add(svnInfo));
 
         info.run();
 
-        return map;
+        return result;
     }
 
     @Override
-    public Map<SvnTarget, SVNDirEntry> list(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException {
+    public List<SVNDirEntry> list(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException {
         SvnList list = operationFactory.getFactory().createList();
         targets.stream().forEach(svnTarget -> list.addTarget(svnTarget));
         list.setDepth(depth);
         list.setRevision(revision);
 
-        Map<SvnTarget, SVNDirEntry> map = new HashMap();
-        list.setReceiver((svnTarget, svnDirEntry) -> map.put(svnTarget, svnDirEntry));
+        List<SVNDirEntry> result = new ArrayList();
+        list.setReceiver((svnTarget, svnDirEntry) -> result.add(svnDirEntry));
 
         list.run();
 
-        return map;
+        return result;
     }
 
     @Override
-    public void checkout(List<SvnTarget> targets, SvnTarget source, SVNDepth depth, SVNRevision revision) throws SVNException {
+    public void checkout(SvnTarget target, SvnTarget source, SVNDepth depth, SVNRevision revision) throws SVNException {
         SvnCheckout checkout = operationFactory.getFactory().createCheckout();
-        targets.stream().forEach(svnTarget -> checkout.addTarget(svnTarget));
+        checkout.setSingleTarget(target);
         checkout.setSource(source);
         checkout.setDepth(depth);
         checkout.setRevision(revision);
@@ -79,27 +80,36 @@ public class SvnServiceImpl implements SvnService{
     }
 
     @Override
-    public void update(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException {
+    public void update(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision,  boolean makeParents) throws SVNException {
         SvnUpdate update = operationFactory.getFactory().createUpdate();
         targets.stream().forEach(svnTarget -> update.addTarget(svnTarget));
         update.setDepth(depth);
         update.setRevision(revision);
+        update.setMakeParents(makeParents);
         update.run();
     }
 
     @Override
-    public Map<SvnTarget, SVNCommitInfo> commit(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision, ISvnObjectReceiver<SVNCommitInfo> receiver) throws SVNException {
+    public List<SVNCommitInfo> commit(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision, String message) throws SVNException {
         SvnCommit commit = operationFactory.getFactory().createCommit();
         targets.stream().forEach(svnTarget -> commit.addTarget(svnTarget));
         commit.setDepth(depth);
         commit.setRevision(revision);
+        commit.setCommitMessage(message);
 
-        Map<SvnTarget, SVNCommitInfo> map = new HashMap();
-        commit.setReceiver((svnTarget, commitInfo) -> map.put(svnTarget, commitInfo));
+        List<SVNCommitInfo> result = new ArrayList();
+        commit.setReceiver((svnTarget, commitInfo) -> result.add(commitInfo));
 
         commit.run();
 
-        return map;
+        return result;
+    }
+
+    @Override
+    public void cleanup(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException {
+        SvnCleanup cleanup = operationFactory.getFactory().createCleanup();
+        targets.stream().forEach(svnTarget -> cleanup.addTarget(svnTarget));
+        cleanup.run();
     }
 
     @Override

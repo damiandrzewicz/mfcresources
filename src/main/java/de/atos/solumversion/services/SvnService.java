@@ -18,15 +18,17 @@ public interface SvnService {
 
     void logout();
 
-    Map<SvnTarget, SvnInfo> info(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException;
+    List<SvnInfo> info(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException;
 
-    Map<SvnTarget, SVNDirEntry> list(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException;
+    List<SVNDirEntry> list(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException;
 
-    void checkout(List<SvnTarget> targets, SvnTarget source, SVNDepth depth, SVNRevision revision) throws SVNException;
+    void checkout(SvnTarget target, SvnTarget source, SVNDepth depth, SVNRevision revision) throws SVNException;
 
-    void update(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException;
+    void update(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision, boolean makeParents) throws SVNException;
 
-    Map<SvnTarget, SVNCommitInfo> commit(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision, ISvnObjectReceiver<SVNCommitInfo> receiver) throws SVNException;
+    List<SVNCommitInfo> commit(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision, String message) throws SVNException;
+
+    void cleanup(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException;
 
     void remove();
 
