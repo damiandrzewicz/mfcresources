@@ -7,7 +7,7 @@ import lombok.Setter;
 @Getter
 public class MfcResourceDTO {
 
-    private SvnItemDTO svnItemDTO;
+    private SvnTargetDTO svnItemDTO;
 
     private String productVersion;
 

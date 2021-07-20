@@ -1,6 +1,6 @@
 package de.atos.solumversion.controllers;
 
-import de.atos.solumversion.dto.SvnItemDTO;
+import de.atos.solumversion.dto.SvnTargetDTO;
 import de.atos.solumversion.exceptions.AuthException;
 import de.atos.solumversion.services.MfcProjectService;
 import de.atos.solumversion.services.MfcProjectServiceException;
@@ -20,7 +20,7 @@ public class ProjectsController {
     }
 
     @PostMapping
-    public SvnItemDTO fetch(@RequestBody SvnItemDTO svnItemDTO) throws AuthException, MfcProjectServiceException {
+    public SvnTargetDTO fetch(@RequestBody SvnTargetDTO svnItemDTO) throws AuthException, MfcProjectServiceException {
         mfcProjectService.fetch(svnItemDTO);
         throw new AuthException("auth exception");
     }
