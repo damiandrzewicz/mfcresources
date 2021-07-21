@@ -9,9 +9,17 @@ import lombok.Setter;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SvnData {
 
-    private String url;
+    private String target;
 
     private String name;
 
-    private int revision;
+    private long revision;
+
+    public boolean validateAllowedTarget(){
+        if(target.startsWith("http")){
+            return true;
+        } else{
+            return false;
+        }
+    }
 }

@@ -1,10 +1,19 @@
 package de.atos.solumversion.services;
 
-import de.atos.solumversion.dto.SvnTargetDTO;
+import de.atos.solumversion.dto.ProjectDTO;
+import de.atos.solumversion.dto.ResourceDTO;
+
+import java.util.List;
 
 public interface MfcProjectService {
 
-    SvnTargetDTO fetch(SvnTargetDTO svnItemDTO) throws MfcProjectServiceException;
+    ProjectDTO fetchProject(ProjectDTO projectDTO) throws MfcProjectServiceException;
+
+    ProjectDTO updateWholeWorkingCopyProject(ProjectDTO projectDTO) throws MfcProjectServiceException;
+
+    List<ProjectDTO> getWorkingCopyProjects() throws MfcProjectServiceException;
+
+    List<ResourceDTO> getProjectResources(ProjectDTO projectDTO) throws MfcProjectServiceException;
 
 //    void remove(SvnItemDTO svnItemDTO);
 //
