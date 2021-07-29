@@ -1,6 +1,7 @@
 package de.atos.solumversion.controllers;
 
 import de.atos.solumversion.dto.CommitDTO;
+import de.atos.solumversion.dto.CommitInfoDTO;
 import de.atos.solumversion.dto.MfcProjectDTO;
 import de.atos.solumversion.dto.MfcResourceDTO;
 import de.atos.solumversion.services.MfcResourceService;
@@ -27,23 +28,23 @@ public class MfcResourcesController {
     }
 
     @PutMapping
-    public List<MfcResourceDTO> updateResources(@RequestBody List<MfcResourceDTO> mfcResourceDTOS){
-        return mfcResourceService.updateResources(mfcResourceDTOS);
+    public void updateResources(@RequestBody List<MfcResourceDTO> mfcResourceDTOS){
+        mfcResourceService.updateResources(mfcResourceDTOS);
     }
 
     @PostMapping("/commit")
-    public List<MfcResourceDTO>  commit(@RequestBody CommitDTO commitDTO){
+    public CommitInfoDTO commit(@RequestBody CommitDTO commitDTO){
         return mfcResourceService.commit(commitDTO);
     }
 
     @PostMapping("/update")
-    public List<MfcResourceDTO> update(@RequestBody List<MfcResourceDTO> mfcResourceDTOS) throws MfcResourceServiceException {
-        return mfcResourceService.update(mfcResourceDTOS);
+    public void update(@RequestBody List<String> urls) throws MfcResourceServiceException {
+        mfcResourceService.update(urls);
     }
 
     @PostMapping("/revert")
-    public MfcResourceDTO revert(@RequestBody MfcResourceDTO mfcResourceDTO){
-        return mfcResourceService.revert(mfcResourceDTO);
+    public void revert(@RequestBody List<String> urls){
+        mfcResourceService.revert(urls);
     }
 
 

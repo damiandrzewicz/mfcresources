@@ -9,4 +9,6 @@ import java.io.File;
 public interface MfcResourceParserService {
 
     MfcResourceProperties parseResourceProperties(File resourceFile) throws MfcResourceParserServiceException;
+
+    void updateResourceProperties(File resourceFile, MfcResourceProperties mfcResourceProperties) throws MfcResourceParserServiceException;
 }

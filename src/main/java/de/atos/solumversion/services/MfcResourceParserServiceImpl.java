@@ -10,82 +10,114 @@ import java.util.Scanner;
 @Service
 @Slf4j
 public class MfcResourceParserServiceImpl implements MfcResourceParserService {
-    @Override
-    public MfcResourceProperties parseResourceProperties(File resourceFile) throws MfcResourceParserServiceException {
-        if(!resourceFile.exists()){
-            throw new MfcResourceParserServiceException(String.format("Resource file not exists: [%s]", resourceFile.getPath()));
+
+    private enum Property{
+        FileVersion("FILEVERSION"),
+        ProductVersion("PRODUCTVERSION"),
+        CompanyName("CompanyName"),
+        FileDescription("FileDescription"),
+        InternalName("InternalName"),
+        LegalCopyright("LegalCopyright"),
+        OriginalFilename("OriginalFilename"),
+        ProductName("ProductName"),
+        SpecialBuild("SpecialBuild"),
+        ;
+
+        private final String text;
+
+        Property(final String text){
+            this.text = text;
         }
 
-        Scanner scanner = null;
-        try {
-            scanner = new Scanner(resourceFile);
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
+        @Override
+        public String toString(){
+            return text;
         }
+    }
+
+    private interface FileLineCallback{
+        public void processLine(String line);
+    }
+
+    @Override
+    public MfcResourceProperties parseResourceProperties(File resourceFile) throws MfcResourceParserServiceException {
 
         MfcResourceProperties mfcResourceProperties = new MfcResourceProperties();
 
-        String content = "";
+        readFileCallback(resourceFile, line -> {
+            if(line.contains(Property.FileVersion.toString())){
+                mfcResourceProperties.setFileVersion(getHeaderValue(Property.FileVersion.toString(), line));
+            } else if(line.contains(Property.ProductVersion.toString())){
+                mfcResourceProperties.setProductVersion(getHeaderValue(Property.ProductVersion.toString(), line));
+            } else if(line.contains(Property.CompanyName.toString())){
+                mfcResourceProperties.setCompanyName(getBlockValue(Property.CompanyName.toString(), line));
+            } else if(line.contains(Property.FileDescription.toString())){
+                mfcResourceProperties.setProductVersion(getBlockValue(Property.FileDescription.toString(), line));
+            } else if(line.contains(Property.InternalName.toString())){
+                mfcResourceProperties.setInternalName(getBlockValue(Property.InternalName.toString(), line));
+            } else if(line.contains(Property.LegalCopyright.toString())){
+                mfcResourceProperties.setLegalCopyright(getBlockValue(Property.LegalCopyright.toString(), line));
+            } else if(line.contains(Property.OriginalFilename.toString())){
+                mfcResourceProperties.setOriginalFilename(getBlockValue(Property.OriginalFilename.toString(), line));
+            } else if(line.contains(Property.ProductName.toString())){
+                mfcResourceProperties.setProductName(getBlockValue(Property.ProductName.toString(), line));
+            } else if(line.contains(Property.SpecialBuild.toString())){
+                mfcResourceProperties.setSpecialBuild(getBlockValue(Property.SpecialBuild.toString(), line));
+            }
+        });
+
+
+        return mfcResourceProperties;
+    }
+
+    @Override
+    public void updateResourceProperties(File resourceFile, MfcResourceProperties mfcResourceProperties) throws MfcResourceParserServiceException {
+        readFileCallback(resourceFile, line -> {
+            if(line.contains(Property.FileVersion.toString()) && !mfcResourceProperties.getFileVersion().isEmpty()){
+                line.replace(Property.FileVersion.toString(), mfcResourceProperties.getFileVersion());
+            } else if(line.contains(Property.ProductVersion.toString()) && !mfcResourceProperties.getProductVersion().isEmpty()){
+                line.replace(Property.ProductVersion.toString(), mfcResourceProperties.getProductVersion());
+            } else if(line.contains(Property.CompanyName.toString()) && !mfcResourceProperties.getCompanyName().isEmpty()){
+                line.replace(Property.CompanyName.toString(), mfcResourceProperties.getCompanyName());
+            } else if(line.contains(Property.FileDescription.toString()) && !mfcResourceProperties.getFileDescription().isEmpty()){
+                line.replace(Property.FileDescription.toString(), mfcResourceProperties.getFileDescription());
+            } else if(line.contains(Property.InternalName.toString()) && !mfcResourceProperties.getInternalName().isEmpty()){
+                line.replace(Property.InternalName.toString(), mfcResourceProperties.getInternalName());
+            } else if(line.contains(Property.LegalCopyright.toString()) && !mfcResourceProperties.getLegalCopyright().isEmpty()){
+                line.replace(Property.LegalCopyright.toString(), mfcResourceProperties.getLegalCopyright());
+            } else if(line.contains(Property.OriginalFilename.toString()) && !mfcResourceProperties.getOriginalFilename().isEmpty()){
+                line.replace(Property.OriginalFilename.toString(), mfcResourceProperties.getOriginalFilename());
+            } else if(line.contains(Property.ProductName.toString()) && !mfcResourceProperties.getProductName().isEmpty()){
+                line.replace(Property.ProductName.toString(), mfcResourceProperties.getProductName());
+            } else if(line.contains(Property.SpecialBuild.toString()) && !mfcResourceProperties.getSpecialBuild().isEmpty()){
+                line.replace(Property.SpecialBuild.toString(), mfcResourceProperties.getSpecialBuild());
+            }
+        });
+    }
+
+    private void readFileCallback(File file, FileLineCallback callback) throws MfcResourceParserServiceException {
+        if(!file.exists()){
+            throw new MfcResourceParserServiceException(String.format("Resource file not exists: [%s]", file.getPath()));
+        }
 
         try {
-            BufferedReader bufferedReader = new BufferedReader(new FileReader(resourceFile));
+            BufferedReader bufferedReader = new BufferedReader(new FileReader(file));
             String line = bufferedReader.readLine();
             while(line != null){
-                //content += line + System.lineSeparator();
-                if(line.contains("FILEVERSION")){
-                    String fileversion = line.replace("FILEVERSION", "").trim().replace(",", ".");
-                    mfcResourceProperties.setFileVersion(fileversion);
-                } else if(line.contains("PRODUCTVERSION")){
-                    String productversion = line.replace("PRODUCTVERSION", "").trim().replace(",", ".");
-                    mfcResourceProperties.setProductVersion(productversion);
-                } else if(line.contains("CompanyName")){
-                    String productversion = line.replace("CompanyName", "").replace(",", ".").replace("\"", "").replace("VALUE", "").trim();
-                    mfcResourceProperties.setCompanyName(productversion);
-                } else if(line.contains("FileDescription")){
-                    String productversion = line.replace("FileDescription", "").replace(",", "").replace("\"", "").replace("VALUE", "").trim();
-                    mfcResourceProperties.setProductVersion(productversion);
-                }else if(line.contains("InternalName")){
-                    String productversion = line.replace("InternalName", "").replace(",", "").replace("\"", "").replace("VALUE", "").trim();
-                    mfcResourceProperties.setInternalName(productversion);
-                }else if(line.contains("LegalCopyright")){
-                    String productversion = line.replace("LegalCopyright", "").replace(",", "").replace("\"", "").replace("VALUE", "").trim();
-                    mfcResourceProperties.setLegalCopyright(productversion);
-                }else if(line.contains("OriginalFilename")){
-                    String productversion = line.replace("OriginalFilename", "").replace(",", "").replace("\"", "").replace("VALUE", "").trim();
-                    mfcResourceProperties.setOriginalFilename(productversion);
-                }else if(line.contains("ProductName")){
-                    String productversion = line.replace("ProductName", "").replace(",", "").replace("\"", "").replace("VALUE", "").trim();
-                    mfcResourceProperties.setProductName(productversion);
-                }else if(line.contains("SpecialBuild")){
-                    String productversion = line.replace("SpecialBuild", "").replace(",", "").replace("\"", "").replace("VALUE", "").trim();
-                    mfcResourceProperties.setSpecialBuild(productversion);
-                }else if(line.contains("FileDescription")){
-                    String productversion = line.replace("FileDescription", "").replace(",", "").replace("\"", "").replace("VALUE", "").trim();
-                    mfcResourceProperties.setFileDescription(productversion);
-                }
-
+                callback.processLine(line);
                 line = bufferedReader.readLine();
             }
-
             bufferedReader.close();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
 
-//        while (scanner.hasNextLine()) {
-//            String line = scanner.nextLine();
-//            content += line + System.lineSeparator();
-//            if(line.contains("FILEVERSION")){
-//                String fileversion = line.replace("FILEVERSION", "").trim().replace(",", ".");
-//                resourceProperties.setFileVersion(fileversion);
-//            } else if(line.contains("PRODUCTVERSION")){
-//                String productversion = line.replace("PRODUCTVERSION", "").trim().replace(",", ".");
-//                resourceProperties.setProductVersion(productversion);
-//            }
-//        }
+    private String getHeaderValue(String key, String line){
+        return line.replace(key, "").trim().replace(",", ".");
+    }
 
-        return mfcResourceProperties;
+    private String getBlockValue(String key, String line){
+        return line.replace("CompanyName", "").replace(",", "").replace("\"", "").replace("VALUE", "").trim();
     }
 }

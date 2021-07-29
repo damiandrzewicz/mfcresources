@@ -11,11 +11,11 @@ public interface MfcResourceService {
 
     List<MfcResourceDTO> getResources(MfcProjectDTO mfcProjectDTO) throws MfcResourceServiceException;
 
-    List<MfcResourceDTO> updateResources(List<MfcResourceDTO> mfcResourceDTO);
+    void updateResources(List<MfcResourceDTO> mfcResourceDTO);
 
     CommitInfoDTO commit(CommitDTO commitDTO);
 
-    List<MfcResourceDTO> update(List<MfcResourceDTO> mfcResourceDTOS) throws MfcResourceServiceException;
+    void update(List<String> urls) throws MfcResourceServiceException;
 
-    MfcResourceDTO revert(MfcResourceDTO mfcResourceDTO);
+    void revert(List<String> urls);
 }

@@ -1,6 +1,7 @@
 package de.atos.solumversion.services;
 
 import de.atos.solumversion.configuration.WorkingCopyDirectoryConfig;
+import de.atos.solumversion.domain.MfcResourceProperties;
 import de.atos.solumversion.dto.CommitDTO;
 import de.atos.solumversion.dto.CommitInfoDTO;
 import de.atos.solumversion.dto.MfcProjectDTO;
@@ -113,9 +114,7 @@ public class MfcResourceServiceImpl implements MfcResourceService{
             mfcResourceDTO.setProjectName(path.getParent().getFileName().toString());
 
             mfcResourceDTO.getSvnInfo().setRevision(resource.getRevision());
-
             mfcResourceDTO.getSvnInfo().setLastCommitAuthor(resource.getChangedAuthor());
-
 
             String relativePath = Paths.get(workingCopyDirectoryConfig.getRootDirectory()).toUri().relativize(resource.getPath().toURI()).getPath();
             mfcResourceDTO.getSvnInfo().setUrl(relativePath);
@@ -126,8 +125,14 @@ public class MfcResourceServiceImpl implements MfcResourceService{
                     .findFirst();
             mfcResourceDTO.getSvnInfo().setOutdated(resource.getRevision() < remoteResource.get().getRevision());
 
-
             mfcResourceDTO.getSvnInfo().setHasLocalModifications(resource.getTextStatus() != SVNStatusType.STATUS_NORMAL);
+
+            try {
+                MfcResourceProperties mfcResourceProperties = mfcResourceParserService.parseResourceProperties(path.toFile());
+                mfcResourceDTO.setMfcResourceProperties(mfcResourceProperties);
+            } catch (MfcResourceParserServiceException e) {
+                e.printStackTrace();
+            }
 
             result.add(mfcResourceDTO);
         }
@@ -136,8 +141,18 @@ public class MfcResourceServiceImpl implements MfcResourceService{
     }
 
     @Override
-    public List<MfcResourceDTO> updateResources(List<MfcResourceDTO> mfcResourceDTO) {
-        return null;
+    public void updateResources(List<MfcResourceDTO> mfcResourceDTOS) {
+        String rootDirectory = workingCopyDirectoryConfig.getRootDirectory();
+
+        for(var mfcResourceDTO : mfcResourceDTOS){
+            File file = Paths.get(workingCopyDirectoryConfig.getRootDirectory(), mfcResourceDTO.getSvnInfo().getUrl()).toFile();
+
+            try {
+                mfcResourceParserService.updateResourceProperties(file, mfcResourceDTO.getMfcResourceProperties());
+            } catch (MfcResourceParserServiceException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     @Override
@@ -169,12 +184,12 @@ public class MfcResourceServiceImpl implements MfcResourceService{
     }
 
     @Override
-    public List<MfcResourceDTO> update(List<MfcResourceDTO> mfcResourceDTOS) throws MfcResourceServiceException {
+    public void update(List<String> urls) throws MfcResourceServiceException {
         String rootDirectory = workingCopyDirectoryConfig.getRootDirectory();
 
-        List<SvnTarget> resourcePaths = mfcResourceDTOS
+        List<SvnTarget> resourcePaths = urls
                 .stream()
-                .map(mfcResourceDTO1 -> SvnTarget.fromFile(Paths.get(rootDirectory, mfcResourceDTO1.getSvnInfo().getUrl()).toFile()))
+                .map(url -> SvnTarget.fromFile(Paths.get(rootDirectory, url).toFile()))
                 .collect(Collectors.toList());
 
         try {
@@ -187,78 +202,10 @@ public class MfcResourceServiceImpl implements MfcResourceService{
         } catch (SVNException e) {
             e.printStackTrace();
         }
-
-        // Get info about working copy
-
-        List<MfcResourceDTO> result = new ArrayList<>();
-        for(var resourceDTO : mfcResourceDTOS){
-            File file = Paths.get(rootDirectory, resourceDTO.getSvnInfo().getUrl()).toFile();
-
-            List<SvnStatus> filesInSrcLocal = null;
-            try {
-                filesInSrcLocal = svnService.status(
-                        SvnTarget.fromFile(file),
-                        SVNDepth.INFINITY,
-                        SVNRevision.HEAD,
-                        false,
-                        true);
-            } catch (SVNException e) {
-                throw new MfcResourceServiceException(String.format("Error getting resources: [%s]", e.getMessage()));
-            }
-
-            if(Objects.isNull(filesInSrcLocal)){
-                throw new MfcResourceServiceException(String.format("Error getting resources: [%s]", "sources folder is empty"));
-            }
-
-            SvnStatus localStatus = filesInSrcLocal.get(0);
-
-            // Get info from remote
-            List<SvnStatus> filesInSrcRemote = null;
-            try {
-                filesInSrcRemote = svnService.status(
-                        SvnTarget.fromFile(file),
-                        SVNDepth.INFINITY,
-                        SVNRevision.HEAD,
-                        true,
-                        true);
-            } catch (SVNException e) {
-                throw new MfcResourceServiceException(String.format("Error getting resources: [%s]", e.getMessage()));
-            }
-
-            if(Objects.isNull(filesInSrcRemote)){
-                throw new MfcResourceServiceException(String.format("Error getting resources: [%s]", "sources folder is empty"));
-            }
-
-            SvnStatus remoteStatus = filesInSrcRemote.get(0);
-
-            MfcResourceDTO mfcResourceDTO  =new MfcResourceDTO();
-
-            Path path = Paths.get(localStatus.getPath().toString());
-
-            mfcResourceDTO.setResourceNameWithExtension(path.getFileName().toString());
-
-            mfcResourceDTO.setProjectName(path.getParent().getFileName().toString());
-
-            mfcResourceDTO.getSvnInfo().setRevision(localStatus.getRevision());
-
-
-            String relativePath = Paths.get(workingCopyDirectoryConfig.getRootDirectory()).toUri().relativize(localStatus.getPath().toURI()).getPath();
-            mfcResourceDTO.getSvnInfo().setUrl(relativePath);
-
-
-            mfcResourceDTO.getSvnInfo().setOutdated(localStatus.getRevision() < remoteStatus.getRevision());
-
-
-            mfcResourceDTO.getSvnInfo().setHasLocalModifications(localStatus.getTextStatus() != SVNStatusType.STATUS_NORMAL);
-
-            result.add(mfcResourceDTO);
-        }
-
-        return result;
     }
 
     @Override
-    public MfcResourceDTO revert(MfcResourceDTO mfcResourceDTO) {
-        return null;
+    public void revert(List<String> urls) {
+
     }
 }
