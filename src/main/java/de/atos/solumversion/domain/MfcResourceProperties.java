@@ -1,13 +1,11 @@
-package de.atos.solumversion.dto;
+package de.atos.solumversion.domain;
 
 import lombok.Getter;
 import lombok.Setter;
 
 @Setter
 @Getter
-public class ResourceDTO {
-
-    private SvnData svnData = new SvnData();
+public class MfcResourceProperties {
 
     private String productVersion;
 

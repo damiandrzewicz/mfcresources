@@ -13,9 +13,9 @@ public class TelemetryLogger {
 
     @Around("execution(* de.atos.solumversion..*.* (..))")
     public Object logBeforeAndAfterServiceMethods(ProceedingJoinPoint pjp) throws Throwable {
-        log.debug("{} start", pjp.getSignature());
+        log.debug("{} start", pjp.getSignature().toString());
         Object result = pjp.proceed();
-        log.debug("{} end", pjp.getSignature());
+        log.debug("{} end", pjp.getSignature().toString());
         return result;
     }
 }

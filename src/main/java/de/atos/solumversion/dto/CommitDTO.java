@@ -9,7 +9,7 @@ import java.util.List;
 @Getter
 public class CommitDTO {
 
-    private List<SvnTargetDTO> items;
-
     private String message;
+
+    private List<String> urls;
 }

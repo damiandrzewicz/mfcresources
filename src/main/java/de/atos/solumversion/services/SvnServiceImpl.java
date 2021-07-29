@@ -11,6 +11,7 @@ import org.tmatesoft.svn.core.SVNDepth;
 import org.tmatesoft.svn.core.SVNDirEntry;
 import org.tmatesoft.svn.core.SVNException;
 import org.tmatesoft.svn.core.wc.SVNRevision;
+import org.tmatesoft.svn.core.wc.SVNStatus;
 import org.tmatesoft.svn.core.wc2.*;
 
 import java.util.ArrayList;
@@ -70,6 +71,26 @@ public class SvnServiceImpl implements SvnService{
     }
 
     @Override
+    public List<SvnStatus> status(SvnTarget target, SVNDepth depth, SVNRevision revision, boolean remote, boolean reportAll) throws SVNException {
+        SvnGetStatus status = operationFactory.getFactory().createGetStatus();
+        status.setSingleTarget(target);
+        status.setDepth(depth);
+        status.setRevision(revision);
+        status.setRemote(remote);
+        status.setReportAll(reportAll);
+
+        List<SvnStatus> result = new ArrayList();
+        status.setReceiver((svnTarget, svnStatus) -> result.add(svnStatus));
+
+        status.run();
+
+        long remoteRevision = status.getRemoteRevision();
+       // status.getRevision()
+
+        return result;
+    }
+
+    @Override
     public void checkout(SvnTarget target, SvnTarget source, SVNDepth depth, SVNRevision revision) throws SVNException {
         SvnCheckout checkout = operationFactory.getFactory().createCheckout();
         checkout.setSingleTarget(target);
@@ -86,23 +107,19 @@ public class SvnServiceImpl implements SvnService{
         update.setDepth(depth);
         update.setRevision(revision);
         update.setMakeParents(makeParents);
+
         update.run();
     }
 
     @Override
-    public List<SVNCommitInfo> commit(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision, String message) throws SVNException {
+    public SVNCommitInfo commit(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision, String message) throws SVNException {
         SvnCommit commit = operationFactory.getFactory().createCommit();
         targets.stream().forEach(svnTarget -> commit.addTarget(svnTarget));
         commit.setDepth(depth);
         commit.setRevision(revision);
         commit.setCommitMessage(message);
 
-        List<SVNCommitInfo> result = new ArrayList();
-        commit.setReceiver((svnTarget, commitInfo) -> result.add(commitInfo));
-
-        commit.run();
-
-        return result;
+        return commit.run();
     }
 
     @Override

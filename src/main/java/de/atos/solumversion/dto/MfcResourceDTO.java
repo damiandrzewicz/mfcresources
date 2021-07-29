@@ -1,5 +1,8 @@
 package de.atos.solumversion.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import de.atos.solumversion.domain.MfcResourceProperties;
+import de.atos.solumversion.domain.SvnInfo;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -7,21 +10,21 @@ import lombok.Setter;
 @Getter
 public class MfcResourceDTO {
 
-    private SvnTargetDTO svnItemDTO;
+    private SvnInfo svnInfo = new SvnInfo();
 
-    private String productVersion;
+    private String projectName;
 
-    private String fileVersion;
+    private String resourceNameWithExtension;
 
-    private String companyName;
+    private MfcResourceProperties mfcResourceProperties = new MfcResourceProperties();
 
-    private String fileDescription;
-
-    private String internalName;
-
-    private String originalFilename;
-
-    private String productName;
-
-    private String specialBuild;
+    @JsonIgnore
+    public String getResourceName(){
+        String[] split = this.resourceNameWithExtension.split(".");
+        if(split.length == 2){
+            return split[0];
+        } else {
+            throw new IllegalArgumentException(String.format("Wrong resource name: %s", this.resourceNameWithExtension));
+        }
+    }
 }

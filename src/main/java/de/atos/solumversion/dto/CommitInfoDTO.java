@@ -5,7 +5,9 @@ import lombok.Setter;
 
 @Setter
 @Getter
-public class ProjectDTO{
+public class CommitInfoDTO {
 
-    private SvnData svnData = new SvnData();
+    private long newRevision;
+
+    private String commitAuthor;
 }
