@@ -1,6 +1,7 @@
 package de.atos.solumversion.services;
 
 import de.atos.solumversion.domain.MfcResourceProperties;
+import de.atos.solumversion.utils.LineFileReader;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -35,16 +36,14 @@ public class MfcResourceParserServiceImpl implements MfcResourceParserService {
         }
     }
 
-    private interface FileLineCallback{
-        public void processLine(String line);
-    }
+
 
     @Override
     public MfcResourceProperties parseResourceProperties(File resourceFile) throws MfcResourceParserServiceException {
 
         MfcResourceProperties mfcResourceProperties = new MfcResourceProperties();
 
-        readFileCallback(resourceFile, line -> {
+        LineFileReader.read(resourceFile, line -> {
             if(line.contains(Property.FileVersion.toString())){
                 mfcResourceProperties.setFileVersion(getHeaderValue(Property.FileVersion.toString(), line));
             } else if(line.contains(Property.ProductVersion.toString())){
@@ -64,6 +63,7 @@ public class MfcResourceParserServiceImpl implements MfcResourceParserService {
             } else if(line.contains(Property.SpecialBuild.toString())){
                 mfcResourceProperties.setSpecialBuild(getBlockValue(Property.SpecialBuild.toString(), line));
             }
+            return true;
         });
 
 
@@ -72,7 +72,7 @@ public class MfcResourceParserServiceImpl implements MfcResourceParserService {
 
     @Override
     public void updateResourceProperties(File resourceFile, MfcResourceProperties mfcResourceProperties) throws MfcResourceParserServiceException {
-        readFileCallback(resourceFile, line -> {
+        LineFileReader.read(resourceFile, line -> {
             if(line.contains(Property.FileVersion.toString()) && !mfcResourceProperties.getFileVersion().isEmpty()){
                 line.replace(Property.FileVersion.toString(), mfcResourceProperties.getFileVersion());
             } else if(line.contains(Property.ProductVersion.toString()) && !mfcResourceProperties.getProductVersion().isEmpty()){
@@ -92,26 +92,11 @@ public class MfcResourceParserServiceImpl implements MfcResourceParserService {
             } else if(line.contains(Property.SpecialBuild.toString()) && !mfcResourceProperties.getSpecialBuild().isEmpty()){
                 line.replace(Property.SpecialBuild.toString(), mfcResourceProperties.getSpecialBuild());
             }
+            return true;
         });
     }
 
-    private void readFileCallback(File file, FileLineCallback callback) throws MfcResourceParserServiceException {
-        if(!file.exists()){
-            throw new MfcResourceParserServiceException(String.format("Resource file not exists: [%s]", file.getPath()));
-        }
 
-        try {
-            BufferedReader bufferedReader = new BufferedReader(new FileReader(file));
-            String line = bufferedReader.readLine();
-            while(line != null){
-                callback.processLine(line);
-                line = bufferedReader.readLine();
-            }
-            bufferedReader.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
 
     private String getHeaderValue(String key, String line){
         return line.replace(key, "").trim().replace(",", ".");

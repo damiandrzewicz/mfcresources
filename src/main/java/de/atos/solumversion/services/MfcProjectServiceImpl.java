@@ -1,6 +1,8 @@
 package de.atos.solumversion.services;
 
+import de.atos.solumversion.components.MfcProjectDescriptorParserFactory;
 import de.atos.solumversion.configuration.WorkingCopyDirectoryConfig;
+import de.atos.solumversion.domain.MfcProjectDescriptor;
 import de.atos.solumversion.domain.MfcResourceProperties;
 import de.atos.solumversion.domain.SvnInfo;
 import de.atos.solumversion.dto.MfcProjectDTO;
@@ -31,9 +33,12 @@ public class MfcProjectServiceImpl implements MfcProjectService {
 
     private WorkingCopyDirectoryConfig workingCopyDirectoryConfig;
 
-    public MfcProjectServiceImpl(SvnService svnService, WorkingCopyDirectoryConfig workingCopyDirectoryConfig) {
+    private MfcProjectDescriptorParserFactory mfcProjectDescriptorParserFactory;
+
+    public MfcProjectServiceImpl(SvnService svnService, WorkingCopyDirectoryConfig workingCopyDirectoryConfig, MfcProjectDescriptorParserFactory mfcProjectDescriptorParserFactory) {
         this.svnService = svnService;
         this.workingCopyDirectoryConfig = workingCopyDirectoryConfig;
+        this.mfcProjectDescriptorParserFactory = mfcProjectDescriptorParserFactory;
     }
 
     @Override
@@ -115,11 +120,11 @@ public class MfcProjectServiceImpl implements MfcProjectService {
         //Get project descriptor
         String projectDescriptorUrl = projectDescriptor.getURL().toString();
         String projectDescriptorRootUrl = projectDescriptor.getRepositoryRoot().toString();
-        String wcPath = workingCopyDirectoryConfig.getRootDirectory() + projectDescriptorUrl.replace(projectDescriptorRootUrl, "");
+        String projectDescriptorPath = projectWCPath + "/" + projectDescriptorUrl.replace(projectDescriptorRootUrl, "");
 
         try {
             svnService.update(
-                    new ArrayList<SvnTarget>(Arrays.asList(SvnTarget.fromFile(new File(wcPath)))),
+                    new ArrayList<SvnTarget>(Arrays.asList(SvnTarget.fromFile(new File(projectDescriptorPath)))),
                     SVNDepth.FILES,
                     SVNRevision.HEAD,
                     true
@@ -127,6 +132,97 @@ public class MfcProjectServiceImpl implements MfcProjectService {
         } catch (SVNException e) {
             throw new MfcProjectServiceException(String.format("Error error updating files: %s", e.getMessage()));
         }
+
+        // Parse main project desciptor
+        Optional<MfcProjectDescriptorParser> mfcProjectDescriptorParserOpt = mfcProjectDescriptorParserFactory.create(new File(projectDescriptorPath));
+        if(mfcProjectDescriptorParserOpt.isEmpty()){
+
+        }
+
+        MfcProjectDescriptorParser mfcProjectDescriptorParser = mfcProjectDescriptorParserOpt.get();
+        MfcProjectDescriptor mfcProjectDescriptor = mfcProjectDescriptorParser.parseDescriptor(new File(projectDescriptorPath));
+
+        // Checkout projects descriptors
+        Map<String, String> projects = mfcProjectDescriptor.getProjects();
+        List<SvnTarget> projectsDescriptorsTargets = projects.entrySet()
+                .stream()
+                .map(stringStringEntry -> SvnTarget.fromFile(Paths.get(projectWCPath, stringStringEntry.getValue()).toFile()))
+                .collect(Collectors.toList());
+
+        try {
+            svnService.update(
+                    projectsDescriptorsTargets,
+                    SVNDepth.FILES,
+                    SVNRevision.HEAD,
+                    true
+            );
+        } catch (SVNException e) {
+            throw new MfcProjectServiceException(String.format("Error error updating files: %s", e.getMessage()));
+        }
+
+        // Search sources folder
+        List<SVNDirEntry> projectSourcesList = rootStructureList.stream()
+                .filter(svnTargetSVNDirEntryEntry -> svnTargetSVNDirEntryEntry.getName().compareToIgnoreCase("src") == 0)
+                .collect(Collectors.toList());
+
+        if(projectSourcesList.isEmpty()){
+            throw new MfcProjectServiceException("Missing project sources");
+        } else if(projectSourcesList.size() > 1){
+            throw new MfcProjectServiceException("Found more than one project sources!");
+        }
+
+        SVNDirEntry projectSources = projectSourcesList.get(0);
+
+        // Get content of source folder
+        List<SVNDirEntry> sourcesEntrie = null;
+        try {
+            sourcesEntrie = svnService.list(
+                    new ArrayList<SvnTarget>(Arrays.asList(SvnTarget.fromURL(projectSources.getURL()))),
+                    SVNDepth.INFINITY,
+                    SVNRevision.HEAD
+            );
+        } catch (SVNException e) {
+            throw new MfcProjectServiceException(String.format("Error loading sources folder for [%s]: %s", remotePath, e.getMessage()));
+        }
+
+        // Filter to get only resource files
+        List<SVNDirEntry> resources = sourcesEntrie
+                .stream()
+                .filter(svnDirEntry -> svnDirEntry.getName().endsWith(".rc"))
+                .collect(Collectors.toList());
+
+        if(Objects.isNull(resources)){
+
+        }
+
+        // Parse project descriptor to find dependencies
+
+
+        // Update only resouce files
+        List<SvnTarget> resourcesWC = resources
+                .stream()
+                .map(svnurl1 -> {
+                    String file = svnurl1.getURL().toString().replace(
+                            svnurl1.getRepositoryRoot().toString(),
+                            ""
+                    );
+                    return SvnTarget.fromFile(new File(projectWCPath + "\\" + file));
+                })
+                .collect(Collectors.toList());
+
+        try {
+            svnService.update(
+                    resourcesWC,
+                    SVNDepth.FILES,
+                    SVNRevision.HEAD,
+                    true
+            );
+        } catch (SVNException e) {
+            throw new MfcProjectServiceException(String.format("Error error updating files: %s", e.getMessage()));
+        }
+
+
+        // Parse project desciptor
 
         MfcProjectDTO resultDto = new MfcProjectDTO();
         resultDto.getSvnInfo().setUrl(rootEntry.getRepositoryRoot().toString());
@@ -138,80 +234,7 @@ public class MfcProjectServiceImpl implements MfcProjectService {
 
 
 
-        // Search sources folder
-//        List<SVNDirEntry> projectSourcesList = rootStructureList.stream()
-//                .filter(svnTargetSVNDirEntryEntry -> svnTargetSVNDirEntryEntry.getName().compareToIgnoreCase("src") == 0)
-//                .collect(Collectors.toList());
-//
-//        if(projectSourcesList.isEmpty()){
-//            throw new MfcProjectServiceException("Missing project sources");
-//        } else if(projectSourcesList.size() > 1){
-//            throw new MfcProjectServiceException("Found more than one project sources!");
-//        }
-//
-//        SVNDirEntry projectSources = projectSourcesList.get(0);
-//
-//        // Get content of source folder
-//        List<SVNDirEntry> sourcesEntrie = null;
-//        try {
-//            sourcesEntrie = svnService.list(
-//                    new ArrayList<SvnTarget>(Arrays.asList(SvnTarget.fromURL(projectSources.getURL()))),
-//                    SVNDepth.INFINITY,
-//                    SVNRevision.HEAD
-//            );
-//        } catch (SVNException e) {
-//            throw new MfcProjectServiceException(String.format("Error loading sources folder for [%s]: %s", remotePath, e.getMessage()));
-//        }
-//
-//        // Filter to get only resource files
-//        List<SVNDirEntry> resources = sourcesEntrie
-//                .stream()
-//                .filter(svnDirEntry -> svnDirEntry.getName().endsWith(".rc"))
-//                .collect(Collectors.toList());
-//
-//        if(Objects.isNull(resources)){
-//
-//        }
-//
-//        // Checkout root
-//        String projectRootPath = rootEntry.getRepositoryRoot().getPath();
-//        String projectName = projectRootPath.substring(projectRootPath.lastIndexOf("/") + 1);
-//
-//        String projectWCPath = workingCopyDirectoryConfig.getRootDirectory() + "/" + projectName;
-//
-//        try {
-//            svnService.checkout(
-//                    SvnTarget.fromFile(new File(projectWCPath)),
-//                    SvnTarget.fromURL(svnurl),
-//                    SVNDepth.EMPTY,
-//                    SVNRevision.HEAD
-//            );
-//        } catch (SVNException e) {
-//            throw new MfcProjectServiceException(String.format("Error checkout url [%s]: %s", remotePath, e.getMessage()));
-//        }
-//
-//        // Update only resouce files
-//        List<SvnTarget> resourcesWC = resources
-//                .stream()
-//                .map(svnurl1 -> {
-//                    String file = svnurl1.getURL().toString().replace(
-//                            svnurl1.getRepositoryRoot().toString(),
-//                            ""
-//                    );
-//                    return SvnTarget.fromFile(new File(projectWCPath + "\\" + file));
-//                })
-//                .collect(Collectors.toList());
-//
-//        try {
-//            svnService.update(
-//                    resourcesWC,
-//                    SVNDepth.FILES,
-//                    SVNRevision.HEAD,
-//                    true
-//            );
-//        } catch (SVNException e) {
-//            throw new MfcProjectServiceException(String.format("Error error updating files: %s", e.getMessage()));
-//        }
+
 //
 //        MfcProjectDTO resultDto = new MfcProjectDTO();
 //        resultDto.getSvnInfo().getRemote().setTarget(remotePath);
