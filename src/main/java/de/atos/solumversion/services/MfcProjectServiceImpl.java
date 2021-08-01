@@ -1,16 +1,12 @@
 package de.atos.solumversion.services;
 
-import de.atos.solumversion.components.MfcProjectDescriptorParserFactory;
+import de.atos.solumversion.components.MfcSolutionDescriptorParserFactory;
 import de.atos.solumversion.configuration.WorkingCopyDirectoryConfig;
 import de.atos.solumversion.domain.MfcProjectDescriptor;
-import de.atos.solumversion.domain.MfcResourceProperties;
-import de.atos.solumversion.domain.SvnInfo;
+import de.atos.solumversion.domain.MfcSolutionDescriptor;
 import de.atos.solumversion.dto.MfcProjectDTO;
-import de.atos.solumversion.dto.MfcResourceDTO;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.FilenameUtils;
 import org.springframework.stereotype.Service;
-import org.springframework.web.context.annotation.SessionScope;
 import org.tmatesoft.svn.core.SVNDepth;
 import org.tmatesoft.svn.core.SVNDirEntry;
 import org.tmatesoft.svn.core.SVNException;
@@ -19,8 +15,6 @@ import org.tmatesoft.svn.core.wc.SVNRevision;
 import org.tmatesoft.svn.core.wc2.*;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -33,12 +27,12 @@ public class MfcProjectServiceImpl implements MfcProjectService {
 
     private WorkingCopyDirectoryConfig workingCopyDirectoryConfig;
 
-    private MfcProjectDescriptorParserFactory mfcProjectDescriptorParserFactory;
+    private MfcSolutionDescriptorParserFactory mfcSolutionDescriptorParserFactory;
 
-    public MfcProjectServiceImpl(SvnService svnService, WorkingCopyDirectoryConfig workingCopyDirectoryConfig, MfcProjectDescriptorParserFactory mfcProjectDescriptorParserFactory) {
+    public MfcProjectServiceImpl(SvnService svnService, WorkingCopyDirectoryConfig workingCopyDirectoryConfig, MfcSolutionDescriptorParserFactory mfcSolutionDescriptorParserFactory) {
         this.svnService = svnService;
         this.workingCopyDirectoryConfig = workingCopyDirectoryConfig;
-        this.mfcProjectDescriptorParserFactory = mfcProjectDescriptorParserFactory;
+        this.mfcSolutionDescriptorParserFactory = mfcSolutionDescriptorParserFactory;
     }
 
     @Override
@@ -134,18 +128,19 @@ public class MfcProjectServiceImpl implements MfcProjectService {
         }
 
         // Parse main project desciptor
-        Optional<MfcProjectDescriptorParser> mfcProjectDescriptorParserOpt = mfcProjectDescriptorParserFactory.create(new File(projectDescriptorPath));
+        Optional<MfcSolutionDescriptorParser> mfcProjectDescriptorParserOpt = mfcSolutionDescriptorParserFactory.create(new File(projectDescriptorPath));
         if(mfcProjectDescriptorParserOpt.isEmpty()){
 
         }
 
-        MfcProjectDescriptorParser mfcProjectDescriptorParser = mfcProjectDescriptorParserOpt.get();
-        MfcProjectDescriptor mfcProjectDescriptor = mfcProjectDescriptorParser.parseDescriptor(new File(projectDescriptorPath));
+        MfcSolutionDescriptorParser mfcSolutionDescriptorParser = mfcProjectDescriptorParserOpt.get();
+        MfcSolutionDescriptor mfcSolutionDescriptor = mfcSolutionDescriptorParser.parseDescriptor(new File(projectDescriptorPath));
 
         // Checkout projects descriptors
-        Map<String, String> projects = mfcProjectDescriptor.getProjects();
+        Map<String, String> projects = mfcSolutionDescriptor.getProjects();
         List<SvnTarget> projectsDescriptorsTargets = projects.entrySet()
                 .stream()
+                .filter(stringStringEntry -> stringStringEntry.getValue().endsWith("vcxproj"))
                 .map(stringStringEntry -> SvnTarget.fromFile(Paths.get(projectWCPath, stringStringEntry.getValue()).toFile()))
                 .collect(Collectors.toList());
 
@@ -159,6 +154,34 @@ public class MfcProjectServiceImpl implements MfcProjectService {
         } catch (SVNException e) {
             throw new MfcProjectServiceException(String.format("Error error updating files: %s", e.getMessage()));
         }
+
+        MfcProjectDescriptorParser projectDescriptorParser = mfcSolutionDescriptorParser.createProjectDescriptorParser();
+
+        List<MfcProjectDescriptor> mfcProjectDescriptors = new ArrayList<>();
+        for(var projectDescriptorTarget : projectsDescriptorsTargets){
+            File file = projectDescriptorTarget.getFile();
+            MfcProjectDescriptor mfcProjectDescriptor = projectDescriptorParser.parse(file);
+            mfcProjectDescriptor.setNameWithExt(file.getName());
+            mfcProjectDescriptor.setPathRelativeToRoot(file.getAbsolutePath().replace(workingCopyDirectoryConfig.getRootDirectory(), ""));
+            mfcProjectDescriptors.add(mfcProjectDescriptor);
+        }
+
+        List<MfcProjectDescriptor> mfcAllowedProjects = mfcProjectDescriptors
+                .stream()
+                .filter(mfcProjectDescriptor -> {
+                    MfcProjectDescriptor.Configuration confRel = mfcProjectDescriptor.getConfigurationRelease();
+                    if (Objects.nonNull(confRel)) {
+                        if (confRel.isApplication() || confRel.isDynamicLibrary()) {
+                            return true;
+                        } else {
+                            return false;
+                        }
+
+                    }
+                    return false;
+                })
+                .collect(Collectors.toList());
+
 
         // Search sources folder
         List<SVNDirEntry> projectSourcesList = rootStructureList.stream()

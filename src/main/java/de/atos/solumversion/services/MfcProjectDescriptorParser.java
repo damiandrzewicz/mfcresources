@@ -6,5 +6,5 @@ import java.io.File;
 
 public interface MfcProjectDescriptorParser {
 
-    MfcProjectDescriptor parseDescriptor(File descriptor);
+    MfcProjectDescriptor parse(File descriptor);
 }
