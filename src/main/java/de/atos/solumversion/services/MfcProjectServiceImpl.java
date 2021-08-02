@@ -14,6 +14,7 @@ import org.tmatesoft.svn.core.SVNDirEntry;
 import org.tmatesoft.svn.core.SVNException;
 import org.tmatesoft.svn.core.SVNURL;
 import org.tmatesoft.svn.core.wc.SVNRevision;
+import org.tmatesoft.svn.core.wc.SVNStatusType;
 import org.tmatesoft.svn.core.wc2.*;
 
 import java.io.File;
@@ -24,6 +25,8 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class MfcProjectServiceImpl implements MfcProjectService {
+
+    List<String> projectExtensions = new ArrayList<>(Arrays.asList(".sln", "vcxproj"));
 
     private SvnService svnService;
 
@@ -181,11 +184,11 @@ public class MfcProjectServiceImpl implements MfcProjectService {
         List<MfcProjectDTO> mfcProjectDTOS = new ArrayList<>();
         for(var wcProject : wcProjects){
 
-            String wcProjectPath = workingCopyDirectoryConfig.getRootDirectory() + "/" + wcProject;
+            File wcProjectFile = Paths.get(workingCopyRootDirectory, wcProject).toFile();
             List<SvnStatus> statusListLocalList = null;
             try {
                 statusListLocalList = svnService.status(
-                        SvnTarget.fromFile(new File(wcProjectPath)),
+                        SvnTarget.fromFile(wcProjectFile),
                         SVNDepth.EMPTY,
                         SVNRevision.HEAD,
                         false,
@@ -203,7 +206,7 @@ public class MfcProjectServiceImpl implements MfcProjectService {
             List<SvnStatus> statusListRemoteList = null;
             try {
                 statusListRemoteList = svnService.status(
-                        SvnTarget.fromFile(new File(wcProjectPath)),
+                        SvnTarget.fromFile(wcProjectFile),
                         SVNDepth.EMPTY,
                         SVNRevision.HEAD,
                         false,
@@ -225,8 +228,36 @@ public class MfcProjectServiceImpl implements MfcProjectService {
             boolean isOutdated = svnStatusLocal.getRevision() < statusListRemote.getRevision();
             mfcProjectDTO.getSvnInfo().setOutdated(isOutdated);
 
+            // Parse solution descriptor
+            String[] solutionDescriptors = wcProjectFile.list((dir, name) -> projectExtensions.stream().anyMatch(s -> name.endsWith(s)));
+            if(solutionDescriptors.length == 0){
+                throw new MfcProjectServiceException(String.format("Missing solution descriptor for project [%s]", wcProject));
+            }
+
+            File solutionDescriptor = Paths.get(wcProjectFile.getAbsolutePath(), solutionDescriptors[0]).toFile();
+            MfcSolutionDescriptorParser mfcSolutionDescriptorParser = null;
+            try {
+                mfcSolutionDescriptorParser = mfcSolutionDescriptorParserFactory.create(solutionDescriptor);
+            } catch (MfcSolutionDescriptorParserFactoryException e) {
+                throw new MfcProjectServiceException(e.getMessage());
+            }
 
             mfcProjectDTO.setName(wcProject);
+
+            MfcSolutionDescriptor mfcSolutionDescriptor = mfcSolutionDescriptorParser.parseDescriptor(solutionDescriptor);
+            mfcProjectDTO.setVisualStudioVersion(mfcSolutionDescriptor.getVisualStudioVersion());
+
+            List<SvnStatus> svnStatuses = doSvnStatus(SvnTarget.fromFile(wcProjectFile), SVNDepth.INFINITY, SVNRevision.HEAD, false, false);
+            Optional<SvnStatus> any = svnStatuses
+                    .stream()
+                    .filter(svnStatus -> !svnStatus.getNodeStatus().equals(SVNStatusType.STATUS_NONE)
+                            && !svnStatus.getNodeStatus().equals(SVNStatusType.STATUS_NORMAL)
+                            && !svnStatus.getNodeStatus().equals(SVNStatusType.STATUS_IGNORED))
+                    .findAny();
+
+            if(any.isPresent()){
+                mfcProjectDTO.getSvnInfo().setHasLocalModifications(true);
+            }
 
             mfcProjectDTOS.add(mfcProjectDTO);
         }
@@ -269,7 +300,7 @@ public class MfcProjectServiceImpl implements MfcProjectService {
     }
 
     private SVNDirEntry getSolutionDescriptorEntry(List<SVNDirEntry> rootStructure) throws MfcProjectServiceException {
-        List<String> projectExtensions = new ArrayList<>(Arrays.asList(".sln", "vcxproj"));
+
         List<SVNDirEntry> projectDescriptors = rootStructure.stream()
                 .filter(svnTargetSVNDirEntryEntry -> {
                     return projectExtensions.stream().anyMatch(s -> svnTargetSVNDirEntryEntry.getName().endsWith(s));
