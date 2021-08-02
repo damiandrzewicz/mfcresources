@@ -50,7 +50,9 @@ public class MfcProjectDescriptor {
 
     private String nameWithExt;
 
-    private String pathRelativeToRoot;
+    private String projectDescriptorAbsolutePath;
+
+    private String resourceFileAbsolutePath;
 
     public String getName(){
         return FilenameUtils.getName(nameWithExt);

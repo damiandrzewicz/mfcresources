@@ -3,6 +3,7 @@ package de.atos.solumversion.services;
 import de.atos.solumversion.domain.MfcProjectDescriptor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FilenameUtils;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
@@ -16,6 +17,8 @@ import org.xml.sax.helpers.DefaultHandler;
 import javax.xml.parsers.*;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Objects;
 
 
@@ -101,6 +104,9 @@ public class MfcProjectDescriptorParserVS2013 implements MfcProjectDescriptorPar
 
         MfcProjectDescriptor mfcProjectDescriptor = new MfcProjectDescriptor();
 
+        mfcProjectDescriptor.setNameWithExt(descriptor.getName());
+        mfcProjectDescriptor.setProjectDescriptorAbsolutePath(descriptor.getAbsolutePath());
+
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         try {
             DocumentBuilder db = dbf.newDocumentBuilder();
@@ -127,10 +133,20 @@ public class MfcProjectDescriptorParserVS2013 implements MfcProjectDescriptorPar
                             if(item1.getNodeName().equals("ConfigurationType")){
                                 config.setConfigurationType(MfcProjectDescriptor.ConfigurationType.valueOf(item1.getTextContent()));
                                 mfcProjectDescriptor.setConfigurationRelease(config);
-                                return mfcProjectDescriptor;
                             }
                         }
                     }
+                }
+            }
+
+            NodeList resourceCompile = doc.getElementsByTagName("ResourceCompile");
+            for(int i = 0; i < resourceCompile.getLength(); i++){
+                Node item = resourceCompile.item(i);
+                Node include = item.getAttributes().getNamedItem("Include");
+                if(Objects.nonNull(include) && Objects.nonNull(include.getTextContent()) && include.getTextContent().endsWith(".rc")){
+                    String pathToDescriptor = FilenameUtils.getPath(descriptor.getAbsolutePath());
+                    File file = new File(pathToDescriptor, include.getTextContent());
+                    mfcProjectDescriptor.setResourceFileAbsolutePath(file.getAbsolutePath().toString());
                 }
             }
 
@@ -160,6 +176,6 @@ public class MfcProjectDescriptorParserVS2013 implements MfcProjectDescriptorPar
 //            e.printStackTrace();
 //        }
 
-        return null;
+        return mfcProjectDescriptor;
     }
 }

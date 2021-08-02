@@ -6,6 +6,7 @@ import de.atos.solumversion.domain.MfcProjectDescriptor;
 import de.atos.solumversion.domain.MfcSolutionDescriptor;
 import de.atos.solumversion.dto.MfcProjectDTO;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FilenameUtils;
 import org.springframework.stereotype.Service;
 import org.tmatesoft.svn.core.SVNDepth;
 import org.tmatesoft.svn.core.SVNDirEntry;
@@ -161,13 +162,12 @@ public class MfcProjectServiceImpl implements MfcProjectService {
         for(var projectDescriptorTarget : projectsDescriptorsTargets){
             File file = projectDescriptorTarget.getFile();
             MfcProjectDescriptor mfcProjectDescriptor = projectDescriptorParser.parse(file);
-            mfcProjectDescriptor.setNameWithExt(file.getName());
-            mfcProjectDescriptor.setPathRelativeToRoot(file.getAbsolutePath().replace(workingCopyDirectoryConfig.getRootDirectory(), ""));
             mfcProjectDescriptors.add(mfcProjectDescriptor);
         }
 
         List<MfcProjectDescriptor> mfcAllowedProjects = mfcProjectDescriptors
                 .stream()
+                .filter(mfcProjectDescriptor -> Objects.nonNull(mfcProjectDescriptor.getResourceFileAbsolutePath()))
                 .filter(mfcProjectDescriptor -> {
                     MfcProjectDescriptor.Configuration confRel = mfcProjectDescriptor.getConfigurationRelease();
                     if (Objects.nonNull(confRel)) {
@@ -181,7 +181,6 @@ public class MfcProjectServiceImpl implements MfcProjectService {
                     return false;
                 })
                 .collect(Collectors.toList());
-
 
         // Search sources folder
         List<SVNDirEntry> projectSourcesList = rootStructureList.stream()
@@ -212,14 +211,18 @@ public class MfcProjectServiceImpl implements MfcProjectService {
         List<SVNDirEntry> resources = sourcesEntrie
                 .stream()
                 .filter(svnDirEntry -> svnDirEntry.getName().endsWith(".rc"))
+                .filter(svnDirEntry -> {
+                    String name = svnDirEntry.getName();
+                    Optional<MfcProjectDescriptor> any = mfcAllowedProjects
+                            .stream()
+                            .filter(mfcProjectDescriptor -> FilenameUtils.getName(mfcProjectDescriptor.getResourceFileAbsolutePath()).equalsIgnoreCase(name)).findAny();
+                    return any.isPresent();
+                })
                 .collect(Collectors.toList());
 
         if(Objects.isNull(resources)){
 
         }
-
-        // Parse project descriptor to find dependencies
-
 
         // Update only resouce files
         List<SvnTarget> resourcesWC = resources
@@ -241,8 +244,12 @@ public class MfcProjectServiceImpl implements MfcProjectService {
                     true
             );
         } catch (SVNException e) {
+            System.out.println(e);
             throw new MfcProjectServiceException(String.format("Error error updating files: %s", e.getMessage()));
         }
+
+
+
 
 
         // Parse project desciptor
