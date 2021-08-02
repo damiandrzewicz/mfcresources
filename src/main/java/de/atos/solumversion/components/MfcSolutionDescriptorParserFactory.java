@@ -8,6 +8,7 @@ import de.atos.solumversion.utils.LineFileReader;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -16,20 +17,20 @@ import java.util.regex.Pattern;
 @Component
 public class MfcSolutionDescriptorParserFactory {
 
-    public Optional<MfcSolutionDescriptorParser> create(File descriptor){
+    public MfcSolutionDescriptorParser create(File descriptor) throws MfcSolutionDescriptorParserFactoryException {
 
         MfcSolutionDescriptor mfcSolutionDescriptor = new MfcSolutionDescriptor();
 
-        AtomicReference<Optional<MfcSolutionDescriptorParser>> mfcProjectDescriptorParser = new AtomicReference<>(Optional.empty());
+        AtomicReference<MfcSolutionDescriptorParser> mfcProjectDescriptorParserRef = new AtomicReference<>();
 
         int lineNumber = 0;
         LineFileReader.read(descriptor, line -> {
 
             if(checkVS600(line, mfcSolutionDescriptor)){
-                mfcProjectDescriptorParser.set(Optional.of(new MfcSolutionDescriptorParserVS600(mfcSolutionDescriptor)));
+                mfcProjectDescriptorParserRef.set(new MfcSolutionDescriptorParserVS600(mfcSolutionDescriptor));
                 return false;
             } else if(checkVS2013(line, mfcSolutionDescriptor)){
-                mfcProjectDescriptorParser.set(Optional.of(new MfcSolutionDescriptorParserVS2013(mfcSolutionDescriptor)));
+                mfcProjectDescriptorParserRef.set(new MfcSolutionDescriptorParserVS2013(mfcSolutionDescriptor));
                 return false;
             }
 
@@ -41,7 +42,12 @@ public class MfcSolutionDescriptorParserFactory {
             }
         });
 
-        return mfcProjectDescriptorParser.get();
+        MfcSolutionDescriptorParser mfcSolutionDescriptorParser = mfcProjectDescriptorParserRef.get();
+        if(Objects.isNull(mfcSolutionDescriptorParser)){
+            throw new MfcSolutionDescriptorParserFactoryException(String.format("Solution descriptor not supported, file: [%s]", descriptor.getAbsolutePath()));
+        }
+
+        return mfcSolutionDescriptorParser;
     }
 
     private boolean checkVS(String line, MfcSolutionDescriptor mfcSolutionDescriptor, String pattern){

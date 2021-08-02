@@ -19,9 +19,9 @@ public interface SvnService {
 
     void logout();
 
-    List<SvnInfo> info(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException;
+    List<SvnInfo> info(SvnTarget target, SVNDepth depth, SVNRevision revision) throws SVNException;
 
-    List<SVNDirEntry> list(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException;
+    List<SVNDirEntry> list(SvnTarget target, SVNDepth depth, SVNRevision revision) throws SVNException;
 
     List<SvnStatus> status(SvnTarget target, SVNDepth depth, SVNRevision revision, boolean remote, boolean reportAll) throws SVNException;
 
@@ -31,7 +31,7 @@ public interface SvnService {
 
     SVNCommitInfo commit(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision, String message) throws SVNException;
 
-    void cleanup(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException;
+    void cleanup(SvnTarget target, SVNDepth depth, SVNRevision revision) throws SVNException;
 
     void remove();
 

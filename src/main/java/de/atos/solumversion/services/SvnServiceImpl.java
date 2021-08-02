@@ -41,9 +41,9 @@ public class SvnServiceImpl implements SvnService{
     }
 
     @Override
-    public List<SvnInfo> info(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException {
+    public List<SvnInfo> info(SvnTarget target, SVNDepth depth, SVNRevision revision) throws SVNException {
         SvnGetInfo info = operationFactory.getFactory().createGetInfo();
-        targets.stream().forEach(svnTarget -> info.addTarget(svnTarget));
+        info.setSingleTarget(target);
         info.setDepth(depth);
         info.setRevision(revision);
 
@@ -56,9 +56,9 @@ public class SvnServiceImpl implements SvnService{
     }
 
     @Override
-    public List<SVNDirEntry> list(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException {
+    public List<SVNDirEntry> list(SvnTarget target, SVNDepth depth, SVNRevision revision) throws SVNException {
         SvnList list = operationFactory.getFactory().createList();
-        targets.stream().forEach(svnTarget -> list.addTarget(svnTarget));
+        list.setSingleTarget(target);
         list.setDepth(depth);
         list.setRevision(revision);
 
@@ -123,9 +123,9 @@ public class SvnServiceImpl implements SvnService{
     }
 
     @Override
-    public void cleanup(List<SvnTarget> targets, SVNDepth depth, SVNRevision revision) throws SVNException {
+    public void cleanup(SvnTarget target, SVNDepth depth, SVNRevision revision) throws SVNException {
         SvnCleanup cleanup = operationFactory.getFactory().createCleanup();
-        targets.stream().forEach(svnTarget -> cleanup.addTarget(svnTarget));
+        cleanup.setSingleTarget(target);
         cleanup.run();
     }
 
